@@ -1,0 +1,53 @@
+我需要利用Trino的Parser新建设一个独立的、轻量级的Java SQL Parser Server，仅负责SQL解析和物理表替换的核心功能。
+功能1是返回SQL中的所有表名。
+功能2是接收到SQL和表名->实际表名的映射后，将SQL中的所有表名替换掉。
+
+核心架构方案
+1. 依赖项设置
+您需要引入 Trino Parser 的核心依赖：
+
+io.trino:trino-parser
+io.trino:trino-grammar
+2. 核心组件分析
+SQL解析器核心类： SqlParser.java:51-96
+
+AST访问者基类： AstVisitor.java:18-33
+
+表节点定义： Table.java:26-71
+
+3. 功能1：提取SQL中的所有表名
+技术实现方案：
+
+创建自定义的 TableNameExtractor 类，继承 AstVisitor
+重写 visitTable 方法来收集表名
+利用 QualifiedName 获取完整表名
+关键代码结构： AstVisitor.java:475-478
+
+表名获取方法： Table.java:62-65
+
+4. 功能2：表名替换
+技术实现方案：
+
+创建自定义的 TableNameReplacer 类，继承 AstVisitor
+构建新的AST，替换表节点
+使用 SqlFormatter 将修改后的AST转换回SQL
+
+SQL格式化核心方法： SqlFormatter.java:218-235
+
+QualifiedName格式化： SqlFormatter.java:230-235
+
+5. 具体实现指导
+Parser初始化： SqlParser.java:78-91
+
+AST构建过程： SqlParser.java:128-193
+
+轻量级Server架构建议
+入口层：使用 Spring Boot 或简单的 HTTP Server
+解析层：基于 Trino SqlParser
+访问层：自定义 AstVisitor 实现
+输出层：使用 SqlFormatter 生成结果
+
+关键实现要点
+表名提取：遍历AST时重点关注 Table 节点，通过 getName() 获取 QualifiedName
+表名替换：构建映射表，在访问 Table 节点时进行替换，然后重新构建AST
+SQL生成：使用 SqlFormatter.formatSql() 将修改后的AST转换回SQL字符串
