@@ -6,8 +6,9 @@ import com.sqlparser.model.ReplaceTablesRequest;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureTestMvc;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import com.sqlparser.service.SqlParserService;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
@@ -17,14 +18,21 @@ import java.util.Map;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.util.Set;
+import java.util.HashSet;
 
 @RunWith(SpringRunner.class)
-@SpringBootTest
-@AutoConfigureTestMvc
+@WebMvcTest(controllers = SqlParserController.class)
 public class SqlParserControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockBean
+    private SqlParserService sqlParserService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -39,6 +47,11 @@ public class SqlParserControllerTest {
     @Test
     public void testExtractTables() throws Exception {
         ExtractTablesRequest request = new ExtractTablesRequest("SELECT * FROM users JOIN orders ON users.id = orders.user_id");
+
+        Set<String> mockResult = new HashSet<>();
+        mockResult.add("users");
+        mockResult.add("orders");
+        when(sqlParserService.extractTableNames(anyString())).thenReturn(mockResult);
 
         mockMvc.perform(post("/api/sql/extract-tables")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -59,6 +72,9 @@ public class SqlParserControllerTest {
                 tableMapping
         );
 
+        when(sqlParserService.replaceTableNames(anyString(), any(Map.class)))
+                .thenReturn("SELECT * FROM user_table JOIN order_table ON user_table.id = order_table.user_id");
+
         mockMvc.perform(post("/api/sql/replace-tables")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -71,10 +87,12 @@ public class SqlParserControllerTest {
     public void testExtractTablesWithEmptySQL() throws Exception {
         ExtractTablesRequest request = new ExtractTablesRequest("");
 
+        when(sqlParserService.extractTableNames(anyString())).thenThrow(new RuntimeException("Empty SQL"));
+
         mockMvc.perform(post("/api/sql/extract-tables")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpected(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.success").value(false));
     }
 }
