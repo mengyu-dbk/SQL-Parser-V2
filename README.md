@@ -7,6 +7,11 @@ A lightweight Java SQL Parser Server built with Trino's Parser for SQL parsing a
 1. **Extract Table Names**: Extract all table names from SQL queries
 2. **Replace Table Names**: Replace table names in SQL queries based on a mapping
 
+## 当前的问题
+1. 在表名中有大小写的时候，这个服务返回的表名目前都是小写的表名。（feature or bug?）
+2. insert, update 等情况中目标表没有解析出来。
+
+
 ## Quick Start
 
 ### Build and Run
