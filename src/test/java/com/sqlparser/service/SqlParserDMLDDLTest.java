@@ -1,29 +1,29 @@
-/*
 package com.sqlparser.service;
 
-
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.junit4.SpringRunner;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.Assert.*;
 
+@RunWith(SpringRunner.class)
 @SpringBootTest
-public class SqlParserDMLDDLTest {
+public class SqlParserDmlDdlTest {
 
     @Autowired
     private SqlParserService sqlParserService;
 
-    // INSERT Statement Tests
+    // INSERT
     @Test
     public void testInsertTableExtraction() throws Exception {
         String sql = "INSERT INTO users (name, email) VALUES ('John', 'john@example.com')";
         Set<String> tableNames = sqlParserService.extractTableNames(sql);
-
         assertNotNull(tableNames);
         assertTrue(tableNames.contains("users"));
     }
@@ -33,7 +33,6 @@ public class SqlParserDMLDDLTest {
         String sql = "INSERT INTO archive_users (id, name, email) " +
                 "SELECT user_id, username, email_address FROM active_users WHERE status = 'inactive'";
         Set<String> tableNames = sqlParserService.extractTableNames(sql);
-
         assertNotNull(tableNames);
         assertTrue(tableNames.contains("archive_users"));
         assertTrue(tableNames.contains("active_users"));
@@ -44,20 +43,17 @@ public class SqlParserDMLDDLTest {
         String sql = "INSERT INTO users (name, email) VALUES ('John', 'john@example.com')";
         Map<String, String> mapping = new HashMap<>();
         mapping.put("users", "user_accounts");
-
         String result = sqlParserService.replaceTableNames(sql, mapping);
-
         assertNotNull(result);
         assertTrue(result.contains("user_accounts"));
         assertFalse(result.contains("users"));
     }
 
-    // UPDATE Statement Tests
+    // UPDATE
     @Test
     public void testUpdateTableExtraction() throws Exception {
         String sql = "UPDATE users SET email = 'newemail@example.com' WHERE id = 1";
         Set<String> tableNames = sqlParserService.extractTableNames(sql);
-
         assertNotNull(tableNames);
         assertTrue(tableNames.contains("users"));
     }
@@ -68,7 +64,6 @@ public class SqlParserDMLDDLTest {
                 "SELECT MAX(order_date) FROM orders WHERE orders.user_id = users.id" +
                 ") WHERE users.status = 'active'";
         Set<String> tableNames = sqlParserService.extractTableNames(sql);
-
         assertNotNull(tableNames);
         assertTrue(tableNames.contains("users"));
         assertTrue(tableNames.contains("orders"));
@@ -79,20 +74,17 @@ public class SqlParserDMLDDLTest {
         String sql = "UPDATE users SET email = 'newemail@example.com' WHERE id = 1";
         Map<String, String> mapping = new HashMap<>();
         mapping.put("users", "user_accounts");
-
         String result = sqlParserService.replaceTableNames(sql, mapping);
-
         assertNotNull(result);
         assertTrue(result.contains("user_accounts"));
         assertFalse(result.contains("users"));
     }
 
-    // DELETE Statement Tests
+    // DELETE
     @Test
     public void testDeleteTableExtraction() throws Exception {
         String sql = "DELETE FROM users WHERE id = 1";
         Set<String> tableNames = sqlParserService.extractTableNames(sql);
-
         assertNotNull(tableNames);
         assertTrue(tableNames.contains("users"));
     }
@@ -103,7 +95,6 @@ public class SqlParserDMLDDLTest {
                 "SELECT user_id FROM inactive_accounts WHERE last_login < '2023-01-01'" +
                 ")";
         Set<String> tableNames = sqlParserService.extractTableNames(sql);
-
         assertNotNull(tableNames);
         assertTrue(tableNames.contains("users"));
         assertTrue(tableNames.contains("inactive_accounts"));
@@ -114,20 +105,17 @@ public class SqlParserDMLDDLTest {
         String sql = "DELETE FROM users WHERE id = 1";
         Map<String, String> mapping = new HashMap<>();
         mapping.put("users", "user_accounts");
-
         String result = sqlParserService.replaceTableNames(sql, mapping);
-
         assertNotNull(result);
         assertTrue(result.contains("user_accounts"));
         assertFalse(result.contains("users"));
     }
 
-    // CREATE Statement Tests
+    // CREATE / DROP
     @Test
     public void testCreateTableExtraction() throws Exception {
         String sql = "CREATE TABLE new_users (id INT, name VARCHAR(100), email VARCHAR(255))";
         Set<String> tableNames = sqlParserService.extractTableNames(sql);
-
         assertNotNull(tableNames);
         assertTrue(tableNames.contains("new_users"));
     }
@@ -136,7 +124,6 @@ public class SqlParserDMLDDLTest {
     public void testCreateTableAsSelectExtraction() throws Exception {
         String sql = "CREATE TABLE backup_users AS SELECT * FROM users WHERE status = 'active'";
         Set<String> tableNames = sqlParserService.extractTableNames(sql);
-
         assertNotNull(tableNames);
         assertTrue(tableNames.contains("backup_users"));
         assertTrue(tableNames.contains("users"));
@@ -147,20 +134,16 @@ public class SqlParserDMLDDLTest {
         String sql = "CREATE TABLE new_users (id INT, name VARCHAR(100), email VARCHAR(255))";
         Map<String, String> mapping = new HashMap<>();
         mapping.put("new_users", "user_accounts");
-
         String result = sqlParserService.replaceTableNames(sql, mapping);
-
         assertNotNull(result);
         assertTrue(result.contains("user_accounts"));
         assertFalse(result.contains("new_users"));
     }
 
-    // DROP Statement Tests
     @Test
     public void testDropTableExtraction() throws Exception {
         String sql = "DROP TABLE old_users";
         Set<String> tableNames = sqlParserService.extractTableNames(sql);
-
         assertNotNull(tableNames);
         assertTrue(tableNames.contains("old_users"));
     }
@@ -170,9 +153,7 @@ public class SqlParserDMLDDLTest {
         String sql = "DROP TABLE old_users";
         Map<String, String> mapping = new HashMap<>();
         mapping.put("old_users", "legacy_users");
-
         String result = sqlParserService.replaceTableNames(sql, mapping);
-
         assertNotNull(result);
         assertTrue(result.contains("legacy_users"));
         assertFalse(result.contains("old_users"));
@@ -254,4 +235,3 @@ public class SqlParserDMLDDLTest {
         assertTrue(tableNames.contains("prospects"));
     }
 }
- */
