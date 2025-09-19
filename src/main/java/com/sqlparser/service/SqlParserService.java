@@ -1,7 +1,6 @@
 package com.sqlparser.service;
 
 import com.sqlparser.visitor.TableNameExtractor;
-import io.trino.sql.SqlFormatter;
 import io.trino.sql.parser.SqlParser;
 import io.trino.sql.tree.Statement;
 import org.springframework.stereotype.Service;
@@ -23,10 +22,6 @@ public class SqlParserService {
 
         TableNameExtractor extractor = new TableNameExtractor();
         extractor.process(statement);
-
-        // Debug: 添加日志来检查解析结果
-        System.out.println("Parsed statement type: " + statement.getClass().getSimpleName());
-        System.out.println("Extracted table names: " + extractor.getTableNames());
 
         return extractor.getTableNames();
     }
