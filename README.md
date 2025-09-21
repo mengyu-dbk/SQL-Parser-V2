@@ -84,17 +84,16 @@ Run tests with:
 - **Visitor Layer**: Custom AstVisitor implementations
 - **Output Layer**: SqlFormatter for SQL generation
 
-## 表名解析覆盖范围与建议
+## 表名解析覆盖范围
 
-- 已支持：`SELECT`、`INSERT`、`UPDATE`（含赋值与 WHERE 子查询）、`DELETE`、`CREATE TABLE`、`CREATE TABLE AS SELECT`、`DROP TABLE`、`TRUNCATE TABLE`、以及常见 `ALTER TABLE` 变体（`ADD/DROP/RENAME COLUMN`、`SET COLUMN TYPE`、`DROP NOT NULL`、`RENAME TABLE`）。
-- 建议补充/可选：
-  - `MERGE INTO … USING …`（目标/来源表及分支条件中的子查询）
-  - `ANALYZE <table>`、`TABLE <table> EXECUTE …`（含 WHERE 子查询）
-  - 表级 `SET PROPERTIES`、`COMMENT ON TABLE`（包含表名）
-  - `SHOW COLUMNS FROM <table>`、`SHOW CREATE TABLE <table>`、`SHOW STATS FOR <table>`（如需计入“表引用”）
-  - 视图/物化视图：`CREATE VIEW/MATERIALIZED VIEW … AS SELECT …` 建议仅解析 AS SELECT 中的底层表；是否将视图名计为“表”，请按业务决定。
-- 是否存在“通用”方案？
-  - 目前没有单一 API 可在所有 DML/DDL 中通用提取表名。推荐做法是基于 Trino AST，使用 `DefaultTraversalVisitor` 精确覆盖含有表引用的节点（如 `Table`、`Insert/Update/Delete`、`Create/Drop/Truncate`、`Alter` 等），并对可能嵌套子查询的字段递归 `process`。
+- 已支持：
+  - DML：`SELECT`、`INSERT`、`UPDATE`（赋值与 WHERE 子查询）、`DELETE`、`MERGE INTO … USING …`
+  - DDL（表）：`CREATE TABLE`、`CREATE TABLE AS SELECT`、`DROP TABLE`、`TRUNCATE TABLE`
+  - ALTER：`ADD/DROP/RENAME COLUMN`、`SET COLUMN TYPE`、`DROP NOT NULL`、`RENAME TABLE`、`ALTER TABLE … EXECUTE …`、`SET PROPERTIES`
+  - 视图/物化视图：`CREATE VIEW/MATERIALIZED VIEW … AS SELECT …`、`DROP/RENAME VIEW`、`DROP/RENAME MATERIALIZED VIEW`、`REFRESH MATERIALIZED VIEW`
+  - 其他：`ANALYZE <table>`、`SHOW COLUMNS FROM <table>`、`SHOW CREATE TABLE/MATERIALIZED VIEW`、`SHOW STATS FOR <relation>`、`COMMENT ON TABLE/VIEW`、`GRANT/REVOKE/SHOW GRANTS`（当对象类型为 TABLE 时）
+
+实现要点：以 Trino AST 为准，使用 `DefaultTraversalVisitor` 覆盖会出现表/对象名的语法节点，并对可能包含子查询的字段（如 `WHERE`、`SET` 赋值、`AS SELECT`、`MERGE` 条件等）递归处理。
 
 ## Dependencies
 

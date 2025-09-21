@@ -146,6 +146,155 @@ public class TableNameExtractor extends DefaultTraversalVisitor<Void> {
         return null;
     }
 
+    // MERGE
+    @Override
+    protected Void visitMerge(Merge node, Void context) {
+        // Target and source relations may be tables or subqueries
+        process(node.getTarget(), null);
+        process(node.getSource(), null);
+        process(node.getPredicate(), null);
+        // Traverse cases (conditions and expressions)
+        for (MergeCase c : node.getMergeCases()) {
+            c.getExpression().ifPresent(expr -> process(expr, null));
+            // Set expressions may contain subqueries
+            c.getSetExpressions().forEach(expr -> process(expr, null));
+        }
+        return null;
+    }
+
+    // ANALYZE
+    @Override
+    protected Void visitAnalyze(Analyze node, Void context) {
+        tableNames.add(node.getTableName().toString());
+        return null;
+    }
+
+    // TABLE EXECUTE
+    @Override
+    protected Void visitTableExecute(TableExecute node, Void context) {
+        process(node.getTable(), null);
+        node.getWhere().ifPresent(expr -> process(expr, null));
+        node.getArguments().forEach(arg -> process(arg.getValue(), null));
+        return null;
+    }
+
+    // SET PROPERTIES (TABLE/MATERIALIZED_VIEW)
+    @Override
+    protected Void visitSetProperties(SetProperties node, Void context) {
+        SetProperties.Type type = node.getType();
+        if (type == SetProperties.Type.TABLE || type == SetProperties.Type.MATERIALIZED_VIEW) {
+            tableNames.add(node.getName().toString());
+        }
+        return null;
+    }
+
+    // COMMENT ON TABLE/VIEW
+    @Override
+    protected Void visitComment(Comment node, Void context) {
+        if (node.getType() == Comment.Type.TABLE || node.getType() == Comment.Type.VIEW) {
+            tableNames.add(node.getName().toString());
+        }
+        return null;
+    }
+
+    // SHOW statements that specify a single table
+    @Override
+    protected Void visitShowColumns(ShowColumns node, Void context) {
+        tableNames.add(node.getTable().toString());
+        return null;
+    }
+
+    @Override
+    protected Void visitShowCreate(ShowCreate node, Void context) {
+        if (node.getType() == ShowCreate.Type.TABLE || node.getType() == ShowCreate.Type.MATERIALIZED_VIEW) {
+            tableNames.add(node.getName().toString());
+        }
+        return null;
+    }
+
+    @Override
+    protected Void visitShowStats(ShowStats node, Void context) {
+        process(node.getRelation(), null);
+        return null;
+    }
+
+    // Views / Materialized Views
+    @Override
+    protected Void visitCreateView(CreateView node, Void context) {
+        // Include view name as an object reference and traverse underlying query
+        tableNames.add(node.getName().toString());
+        process(node.getQuery(), null);
+        return null;
+    }
+
+    @Override
+    protected Void visitDropView(DropView node, Void context) {
+        tableNames.add(node.getName().toString());
+        return null;
+    }
+
+    @Override
+    protected Void visitRenameView(RenameView node, Void context) {
+        tableNames.add(node.getSource().toString());
+        tableNames.add(node.getTarget().toString());
+        return null;
+    }
+
+    @Override
+    protected Void visitCreateMaterializedView(CreateMaterializedView node, Void context) {
+        tableNames.add(node.getName().toString());
+        process(node.getQuery(), null);
+        return null;
+    }
+
+    @Override
+    protected Void visitDropMaterializedView(DropMaterializedView node, Void context) {
+        tableNames.add(node.getName().toString());
+        return null;
+    }
+
+    @Override
+    protected Void visitRenameMaterializedView(RenameMaterializedView node, Void context) {
+        tableNames.add(node.getSource().toString());
+        tableNames.add(node.getTarget().toString());
+        return null;
+    }
+
+    @Override
+    protected Void visitRefreshMaterializedView(RefreshMaterializedView node, Void context) {
+        tableNames.add(node.getName().toString());
+        return null;
+    }
+
+    // GRANT / REVOKE / SHOW GRANTS (only tables)
+    @Override
+    protected Void visitGrant(Grant node, Void context) {
+        GrantObject obj = node.getGrantObject();
+        if (obj.getEntityKind().map(kind -> kind.equalsIgnoreCase("TABLE")).orElse(false)) {
+            tableNames.add(obj.getName().toString());
+        }
+        return null;
+    }
+
+    @Override
+    protected Void visitRevoke(Revoke node, Void context) {
+        GrantObject obj = node.getGrantObject();
+        if (obj.getEntityKind().map(kind -> kind.equalsIgnoreCase("TABLE")).orElse(false)) {
+            tableNames.add(obj.getName().toString());
+        }
+        return null;
+    }
+
+    @Override
+    protected Void visitShowGrants(ShowGrants node, Void context) {
+        node.getGrantObject().ifPresent(obj -> {
+            if (obj.getEntityKind().map(kind -> kind.equalsIgnoreCase("TABLE")).orElse(false)) {
+                tableNames.add(obj.getName().toString());
+            }
+        });
+        return null;
+    }
+
     public Set<String> getTableNames() {
         return new HashSet<>(tableNames);
     }
