@@ -71,3 +71,4 @@ Request/response DTOs in `src/main/java/com/sqlparser/model/`:
 - Spring Boot Test 3.3.4 for integration tests
 - Test classes in `src/test/java/com/sqlparser/`
 - **56 comprehensive unit tests** covering core functionality, advanced SQL patterns, and edge cases
+- 如果需要查看trino的源代码，可以看代码库根目录的trino文件夹

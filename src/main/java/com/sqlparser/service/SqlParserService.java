@@ -1,6 +1,7 @@
 package com.sqlparser.service;
 
 import com.sqlparser.visitor.TableNameExtractor;
+import com.sqlparser.visitor.TableNameReplacer;
 import io.trino.sql.parser.SqlParser;
 import io.trino.sql.tree.Statement;
 import org.springframework.stereotype.Service;
@@ -27,17 +28,12 @@ public class SqlParserService {
     }
 
     public String replaceTableNames(String sql, Map<String, String> tableMapping) throws Exception {
+        // First validate input SQL and get the AST
         Statement statement = sqlParser.createStatement(sql);
 
-        // Use simple string replacement as fallback for complex AST construction issues
-        String result = sql;
-        for (Map.Entry<String, String> entry : tableMapping.entrySet()) {
-            String oldTable = entry.getKey();
-            String newTable = entry.getValue();
-
-            // Replace table names with word boundaries to avoid partial matches
-            result = result.replaceAll("\\b" + oldTable + "\\b", newTable);
-        }
+        // Use improved context-aware replacement
+        TableNameReplacer replacer = new TableNameReplacer(tableMapping);
+        String result = replacer.replaceTableNames(sql, statement);
 
         // Validate the result by parsing it
         sqlParser.createStatement(result);
