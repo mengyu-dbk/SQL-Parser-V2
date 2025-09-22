@@ -29,9 +29,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // 引用的标识符不应该被替换
-        assertTrue(result.contains("\"order\""));
-        assertFalse(result.contains("order_table"));
+        // 引用的标识符不应该被替换 -> 结果应与输入完全一致
+        assertEquals(sql, result);
     }
 
     @Test
@@ -45,11 +44,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // 应该只替换作为完整标识符的情况，不影响SQL关键字
-        assertTrue(result.contains("SELECT"));
-        assertTrue(result.contains("FROM"));
-        assertTrue(result.contains("user_select"));
-        assertTrue(result.contains("user_from"));
+        // 不应发生任何替换 -> 结果应与输入完全一致
+        assertEquals(sql, result);
     }
 
     // === 表名出现在非表名位置的情况 ===
@@ -63,10 +59,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // 替换FROM中的表标识，同时更新未使用别名的列限定符
-        assertTrue(result.contains("FROM user_accounts") || result.contains("from user_accounts"));
-        assertTrue(result.contains("user_accounts.users_id"));
-        assertTrue(result.contains("user_accounts.users_name"));
+        String expected = "SELECT user_accounts.users_id users, user_accounts.users_name FROM user_accounts";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -78,10 +72,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("FROM user_accounts"));
-        // 函数名不应该被替换
-        assertTrue(result.contains("users_count()"));
-        assertTrue(result.contains("users_active"));
+        String expected = "SELECT COUNT(*), users_count() FROM user_accounts WHERE users_active = true";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -94,10 +86,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("order_records users")); // 别名应该保持不变
-        assertTrue(result.contains("users.customer_id")); // 别名引用应该保持不变
-        assertFalse(result.contains("user_accounts.customer_id")); // 不应该替换别名引用
-        assertFalse(result.contains("FROM customers c JOIN user_accounts")); // orders应该被替换，但别名users保持不变
+        String expected = "SELECT * FROM customers c JOIN order_records users ON c.id = users.customer_id";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -109,10 +99,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("FROM user_accounts"));
-        // 注释和字符串字面量中的"users"应该保持不变
-        assertTrue(result.contains("/* users table comment */"));
-        assertTrue(result.contains("'users data'"));
+        String expected = "SELECT * FROM user_accounts /* users table comment */ WHERE description = 'users data'";
+        assertEquals(expected, result);
     }
 
     // === 复杂的SQL结构边界情况 ===
@@ -129,11 +117,9 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // 当前的提取器不会遍历CTE定义，因此CTE内部的users保持不变；主查询中的orders应被替换
-        assertTrue(result.contains("JOIN order_records"));
-        // CTE名称和引用应该保持不变
-        assertTrue(result.contains("users_cte AS"));
-        assertTrue(result.contains("users_cte"));
+        String expected = "WITH users_cte AS (SELECT * FROM users WHERE active = true) " +
+                "SELECT * FROM users_cte JOIN order_records ON users_cte.id = order_records.user_id";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -146,10 +132,9 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("FROM user_accounts"));
-        assertTrue(result.contains("ORDER BY users")); // ORDER BY中的列名应该保持不变
-        // PARTITION BY中的列名应该保持不变
-        assertTrue(result.contains("PARTITION BY users"));
+        String expected = "SELECT *, ROW_NUMBER() OVER (PARTITION BY users ORDER BY created_at) " +
+                "FROM user_accounts ORDER BY users";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -162,11 +147,9 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("FROM user_accounts"));
-        // CASE语句中的列名应该保持不变
-        assertTrue(result.contains("WHEN users ="));
-        assertTrue(result.contains("ELSE users END"));
-        assertTrue(result.contains("users_type"));
+        String expected = "SELECT CASE WHEN users = 'admin' THEN 'Administrator' ELSE users END " +
+                "FROM user_accounts WHERE users_type = 'regular'";
+        assertEquals(expected, result);
     }
 
     // === 特殊字符和引用边界情况 ===
@@ -181,11 +164,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // 引用标识符不应该被替换
-        assertTrue(result.contains("\"user-table\""));
-        assertTrue(result.contains("\"user_archive\""));
-        assertFalse(result.contains("new_user_table"));
-        assertFalse(result.contains("new_user_archive"));
+        // 引用标识符不应该被替换 -> 完整语句不变
+        assertEquals(sql, result);
     }
 
     @Test
@@ -197,9 +177,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // 非引用的应该被替换，引用的应该保持不变
-        assertTrue(result.contains("FROM user_accounts u"));
-        assertTrue(result.contains("\"users\" qu"));
+        String expected = "SELECT * FROM user_accounts u JOIN \"users\" qu ON u.id = qu.id";
+        assertEquals(expected, result);
     }
 
     // === 数据类型和约束中的表名 ===
@@ -217,8 +196,8 @@ public class SqlParserEdgeCaseBoundaryTest {
 
         assertNotNull(result1);
         assertNotNull(result2);
-        assertTrue(result1.contains("CREATE TABLE order_records"));
-        assertTrue(result2.contains("ALTER TABLE order_records"));
+        assertEquals("CREATE TABLE order_records (id INT, user_id INT)", result1);
+        assertEquals("ALTER TABLE order_records ADD COLUMN status VARCHAR(50)", result2);
     }
 
     // === JSON和数组操作中的表名 ===
@@ -233,10 +212,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("FROM event_records"));
-        // JSON路径和字符串字面量中的users应该保持不变
-        assertTrue(result.contains("data->'users'"));
-        assertTrue(result.contains("'users'"));
+        String expected = "SELECT data->'users' as users_data FROM event_records WHERE table_name = 'users'";
+        assertEquals(expected, result);
     }
 
     // === 递归CTE和复杂查询 ===
@@ -256,12 +233,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // Note: Current TableNameExtractor doesn't traverse into CTEs, so 'users' references inside CTE remain unchanged
-        // This is a known limitation - CTEs require more sophisticated AST traversal
-        // CTE名称应该保持不变
-        assertTrue(result.contains("user_hierarchy AS"));
-        assertTrue(result.contains("JOIN user_hierarchy"));
-        assertTrue(result.contains("user_hierarchy"));
+        // 递归CTE内部不重写 -> 结果与输入一致
+        assertEquals(sql, result);
     }
 
     // === 表名在不同SQL方言特性中 ===
@@ -276,9 +249,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("FROM data_records"));
-        // map键中的users应该保持不变
-        assertTrue(result.contains("map_col['users']"));
+        String expected = "SELECT arr[1] as indexed_value FROM data_records WHERE map_col['users'] = 'active'";
+        assertEquals(expected, result);
     }
 
     // === 表名长度和特殊情况 ===
@@ -293,12 +265,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("FROM table_a"));
-        assertTrue(result.contains("JOIN table_b"));
-        // 别名和列引用应该保持不变
-        assertTrue(result.contains("table_a.id"));
-        assertTrue(result.contains("table_b.a_id"));
-        assertTrue(result.contains("table_a.status"));
+        String expected = "SELECT * FROM table_a JOIN table_b ON table_a.id = table_b.a_id WHERE table_a.status = 'active'";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -310,12 +278,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("FROM person u"));
-        // "users" 和 "user_archive" 不应该被影响
-        assertTrue(result.contains("JOIN users us"));
-        assertTrue(result.contains("JOIN user_archive ua"));
-        assertFalse(result.contains("persons"));
-        assertFalse(result.contains("person_archive"));
+        String expected = "SELECT * FROM person u JOIN users us ON u.id = us.user_id JOIN user_archive ua ON u.id = ua.user_id";
+        assertEquals(expected, result);
     }
 
     // === 空白字符和格式边界情况 ===
@@ -330,9 +294,7 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("user_accounts"));
-        assertTrue(result.contains("order_records"));
-        // 格式应该尽可能保持
-        assertTrue(result.contains("\n"));
+        String expected = "SELECT\n  *\nFROM\n  user_accounts\n  u\nJOIN\n  order_records    o\nON\n  u.id=o.user_id";
+        assertEquals(expected, result);
     }
 }

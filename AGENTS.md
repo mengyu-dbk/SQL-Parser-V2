@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/main/java`: Spring Boot app (`com.sqlparser.SqlParserServerApplication`), REST controller (`controller.SqlParserController`), service (`service.SqlParserService`), DTOs (`model.*`), and Trino AST visitors (`visitor.TableNameExtractor`, `visitor.TablePositionExtractor`).
+- `src/main/java`: Spring Boot app (`com.sqlparser.SqlParserServerApplication`), REST controller (`controller.SqlParserController`), service (`service.SqlParserService`), DTOs (`model.*`), and Trino AST visitor (`visitor.TableNameExtractor`, collects names + precise positions).
 - `src/main/resources`: Spring configuration/resources.
 - `src/test/java`: JUnit tests mirroring main packages; classes end with `*Test.java`.
 - `pom.xml`: Maven build (Java 21, Spring Boot 3, Trino parser).

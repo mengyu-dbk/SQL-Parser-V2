@@ -38,7 +38,7 @@ public class SqlParserAstRewriteTest {
 
     @Test
     public void testMultipleTableRewrite() throws Exception {
-        String sql = "SELECT u.name, o.total FROM users u JOIN orders o ON u.id = o.user_id";
+        String sql = "SELECT u.name users, o.total FROM users u JOIN orders o ON u.id = o.user_id";
         Map<String, String> mapping = new HashMap<>();
         mapping.put("users", "user_accounts");
         mapping.put("orders", "order_records");
@@ -46,14 +46,14 @@ public class SqlParserAstRewriteTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        String expected = "SELECT u.name, o.total FROM user_accounts u JOIN order_records o ON u.id = o.user_id";
+        String expected = "SELECT u.name users, o.total FROM user_accounts u JOIN order_records o ON u.id = o.user_id";
         assertEquals(expected, result);
         assertTrue("Result should be valid SQL", sqlParserService.validateSql(result));
     }
 
     @Test
     public void testSubqueryRewrite() throws Exception {
-        String sql = "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE amount > 100)";
+        String sql = "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE users > 100)";
         Map<String, String> mapping = new HashMap<>();
         mapping.put("users", "user_accounts");
         mapping.put("orders", "order_records");
@@ -61,14 +61,14 @@ public class SqlParserAstRewriteTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        String expected = "SELECT * FROM user_accounts WHERE id IN (SELECT user_id FROM order_records WHERE amount > 100)";
+        String expected = "SELECT * FROM user_accounts WHERE id IN (SELECT user_id FROM order_records WHERE users > 100)";
         assertEquals(expected, result);
         assertTrue("Result should be valid SQL", sqlParserService.validateSql(result));
     }
 
     @Test
     public void testCteRewrite() throws Exception {
-        String sql = "WITH active_users AS (SELECT * FROM users WHERE status = 'active') " +
+        String sql = "WITH users AS (SELECT * FROM users WHERE status = 'active') " +
                     "SELECT * FROM active_users JOIN orders ON active_users.id = orders.user_id";
         Map<String, String> mapping = new HashMap<>();
         mapping.put("users", "user_accounts");
@@ -78,7 +78,7 @@ public class SqlParserAstRewriteTest {
 
         assertNotNull(result);
         // Current rewriter does not traverse CTE definitions, so only the main query is rewritten
-        String expected = "WITH active_users AS (SELECT * FROM users WHERE status = 'active') " +
+        String expected = "WITH users AS (SELECT * FROM users WHERE status = 'active') " +
                           "SELECT * FROM active_users JOIN order_records ON active_users.id = order_records.user_id";
         assertEquals(expected, result);
         assertTrue("Result should be valid SQL", sqlParserService.validateSql(result));
@@ -123,6 +123,7 @@ public class SqlParserAstRewriteTest {
         String sql = "DELETE FROM users WHERE id IN (SELECT user_id FROM inactive_users)";
         Map<String, String> mapping = new HashMap<>();
         mapping.put("users", "user_accounts");
+        mapping.put("user_id", "user_ss");
         mapping.put("inactive_users", "inactive_user_list");
 
         String result = sqlParserService.replaceTableNames(sql, mapping);
@@ -190,11 +191,12 @@ public class SqlParserAstRewriteTest {
         String sql = "SELECT * FROM customers c JOIN orders users ON c.id = users.customer_id";
         Map<String, String> mapping = new HashMap<>();
         mapping.put("orders", "order_records");
+        mapping.put("customers", "customer_records");
 
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        String expected = "SELECT * FROM customers c JOIN order_records users ON c.id = users.customer_id";
+        String expected = "SELECT * FROM customer_records c JOIN order_records users ON c.id = users.customer_id";
         assertEquals(expected, result);
         assertTrue("Result should be valid SQL", sqlParserService.validateSql(result));
     }
@@ -244,6 +246,23 @@ public class SqlParserAstRewriteTest {
 
     @Test
     public void testComplexQueryWithAllConstructs() throws Exception {
+        /*
+         * Manual curl for this multi-line SQL (replace tables):
+         *
+         * curl -sS -H 'Content-Type: application/json' \
+         *   -X POST http://localhost:8080/api/sql/replace-tables \
+         *   --data-binary @- <<'JSON'
+         * {
+         *   "sql": "WITH recent_orders AS (\n    SELECT user_id, SUM(amount) as total\n    FROM orders\n    WHERE order_date > '2023-01-01'\n    GROUP BY user_id\n)\nSELECT u.name, ro.total,\n       (SELECT COUNT(*) FROM products p WHERE p.category = 'electronics') as product_count\nFROM users u\nJOIN recent_orders ro ON u.id = ro.user_id\nLEFT JOIN user_preferences up ON u.id = up.user_id\nWHERE u.status = 'active'\nORDER BY ro.total DESC\nLIMIT 100\n",
+         *   "tableMapping": {
+         *     "orders": "order_records",
+         *     "users": "user_accounts",
+         *     "products": "product_catalog",
+         *     "user_preferences": "user_prefs"
+         *   }
+         * }
+         * JSON
+         */
         String sql = """
             WITH recent_orders AS (
                 SELECT user_id, SUM(amount) as total
