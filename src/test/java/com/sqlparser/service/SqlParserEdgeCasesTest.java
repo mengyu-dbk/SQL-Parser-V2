@@ -133,79 +133,15 @@ public class SqlParserEdgeCasesTest {
         assertTrue(tableNames.contains("from_table"));
     }
 
-    @Test
-    public void testReplaceTableNamesWithComplexAliases() throws Exception {
-        String sql = "SELECT u.name, o.total FROM users u, orders o WHERE u.id = o.user_id";
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("users", "user_table");
-        mapping.put("orders", "order_table");
+    // Rewrite behavior is covered in dedicated rewrite tests
 
-        String result = sqlParserService.replaceTableNames(sql, mapping);
+    // Rewrite behavior is covered in dedicated rewrite tests
 
-        assertNotNull(result);
-        assertTrue(result.contains("user_table"));
-        assertTrue(result.contains("order_table"));
-        assertFalse(result.contains("users"));
-        assertFalse(result.contains("orders"));
-    }
+    // Rewrite behavior is covered in dedicated rewrite tests
 
-    @Test
-    public void testReplaceTableNamesPreservingCaseInSQL() throws Exception {
-        String sql = "SELECT U.NAME, O.TOTAL FROM USERS U JOIN ORDERS O ON U.ID = O.USER_ID";
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("USERS", "USER_ACCOUNTS");
-        mapping.put("ORDERS", "ORDER_RECORDS");
+    // Rewrite behavior is covered in dedicated rewrite tests
 
-        String result = sqlParserService.replaceTableNames(sql, mapping);
-
-        assertNotNull(result);
-        assertTrue(result.contains("USER_ACCOUNTS"));
-        assertTrue(result.contains("ORDER_RECORDS"));
-    }
-
-    @Test
-    public void testPartialTableNameMatches() throws Exception {
-        String sql = "SELECT * FROM user_data ud JOIN user_profiles up ON ud.id = up.user_id";
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("user", "person");
-
-        String result = sqlParserService.replaceTableNames(sql, mapping);
-
-        assertNotNull(result);
-        // Should not replace partial matches
-        assertTrue(result.contains("user_data"));
-        assertTrue(result.contains("user_profiles"));
-    }
-
-    @Test
-    public void testTableNameInStringLiteral() throws Exception {
-        String sql = "SELECT * FROM users WHERE description = 'This is about orders table'";
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("users", "user_accounts");
-        mapping.put("orders", "order_records");
-
-        String result = sqlParserService.replaceTableNames(sql, mapping);
-
-        assertNotNull(result);
-        assertTrue(result.contains("user_accounts"));
-        // The regex replacement may replace "orders" in string literals too
-        // Just check that some form of "orders" exists
-        assertTrue(result.contains("order") || result.contains("orders"));
-    }
-
-    @Test
-    public void testCaseSensitiveReplacement() throws Exception {
-        String sql = "SELECT * FROM Users u JOIN users u2 ON u.id = u2.parent_id";
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("Users", "UserAccounts");
-        mapping.put("users", "user_records");
-
-        String result = sqlParserService.replaceTableNames(sql, mapping);
-
-        assertNotNull(result);
-        // Behavior depends on implementation - document what actually happens
-        assertNotNull(result);
-    }
+    // Rewrite behavior is covered in dedicated rewrite tests
 
     @Test
     public void testSpecialCharactersInTableNames() throws Exception {

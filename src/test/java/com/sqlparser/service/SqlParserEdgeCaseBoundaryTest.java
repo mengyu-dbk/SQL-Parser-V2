@@ -63,10 +63,10 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // 位置替换：仅替换FROM中的表标识，列限定符不修改
+        // 替换FROM中的表标识，同时更新未使用别名的列限定符
         assertTrue(result.contains("FROM user_accounts") || result.contains("from user_accounts"));
-        assertTrue(result.contains("users.users_id"));
-        assertTrue(result.contains("users.users_name"));
+        assertTrue(result.contains("user_accounts.users_id"));
+        assertTrue(result.contains("user_accounts.users_name"));
     }
 
     @Test

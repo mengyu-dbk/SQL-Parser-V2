@@ -146,32 +146,7 @@ public class SqlParserAdvancedTest {
         assertTrue(tableNames.contains("active_users"));
     }
 
-    @Test
-    public void testComplexTableReplacement() throws Exception {
-        String sql = "SELECT c.customer_name, o.order_total, p.product_name " +
-                "FROM customers c " +
-                "JOIN orders o ON c.customer_id = o.customer_id " +
-                "JOIN order_items oi ON o.order_id = oi.order_id " +
-                "JOIN products p ON oi.product_id = p.product_id " +
-                "WHERE c.status = 'active' AND o.order_date >= '2023-01-01'";
-
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("customers", "client_accounts");
-        mapping.put("orders", "purchase_orders");
-        mapping.put("order_items", "purchase_line_items");
-        mapping.put("products", "product_catalog");
-
-        String result = sqlParserService.replaceTableNames(sql, mapping);
-
-        assertNotNull(result);
-        assertTrue(result.contains("client_accounts"));
-        assertTrue(result.contains("purchase_orders"));
-        assertTrue(result.contains("purchase_line_items"));
-        assertTrue(result.contains("product_catalog"));
-        // Allow for flexibility in column reference replacement
-        assertTrue(!result.toLowerCase().contains(" customers ") || result.contains("client_accounts"));
-        assertTrue(!result.toLowerCase().contains(" orders ") || result.contains("purchase_orders"));
-    }
+    // Replacement behavior covered in dedicated rewrite tests
 
     @Test
     public void testSimplifiedRecursivePattern() throws Exception {

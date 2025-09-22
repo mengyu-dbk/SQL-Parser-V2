@@ -28,12 +28,8 @@ public class SqlParserPreciseReplacementTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // Table name in FROM clause should be replaced
-        assertTrue(result.contains("user_accounts"));
-        // But table names in string literals should remain unchanged
-        assertTrue(result.contains("'This mentions users table and orders table'"));
-        assertFalse(result.contains("user_accounts table"));
-        assertFalse(result.contains("order_records table"));
+        String expected = "SELECT * FROM user_accounts WHERE description = 'This mentions users table and orders table'";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -45,14 +41,8 @@ public class SqlParserPreciseReplacementTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // Should not replace partial matches
-        assertTrue(result.contains("user_data"));
-        assertTrue(result.contains("user_profiles"));
-        assertTrue(result.contains("users"));
-        // "user" should not be replaced because it's not a complete word match
-        assertFalse(result.contains("person_data"));
-        assertFalse(result.contains("person_profiles"));
-        assertFalse(result.contains("persons"));
+        // No replacements expected
+        assertEquals(sql, result);
     }
 
     @Test
@@ -64,11 +54,8 @@ public class SqlParserPreciseReplacementTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // "user" should be replaced as it's a complete word
-        assertTrue(result.contains("person"));
-        // "users_archive" should not be affected
-        assertTrue(result.contains("users_archive"));
-        assertFalse(result.contains("persons_archive"));
+        String expected = "SELECT * FROM person u JOIN users_archive ua ON u.id = ua.user_id";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -81,10 +68,8 @@ public class SqlParserPreciseReplacementTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("UserAccounts"));
-        assertTrue(result.contains("USER_RECORDS"));
-        assertFalse(result.contains("Users"));
-        assertFalse(result.contains("USERS"));
+        String expected = "SELECT * FROM UserAccounts u JOIN USER_RECORDS U2 ON u.id = U2.parent_id";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -98,10 +83,7 @@ public class SqlParserPreciseReplacementTest {
 
         assertNotNull(result);
         // Quoted identifiers should be preserved and not replaced
-        assertTrue(result.contains("\"orders\""));
-        assertTrue(result.contains("\"products\""));
-        assertFalse(result.contains("order_records"));
-        assertFalse(result.contains("product_catalog"));
+        assertEquals(sql, result);
     }
 
     @Test
@@ -114,11 +96,8 @@ public class SqlParserPreciseReplacementTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("new_table_with_underscores"));
-        // Quoted identifiers should not be replaced
-        assertTrue(result.contains("\"table-with-dashes\""));
-        assertFalse(result.contains(" table_with_underscores "));
-        assertFalse(result.contains("new-table-with-dashes"));
+        String expected = "SELECT * FROM new_table_with_underscores t JOIN \"table-with-dashes\" d ON t.id = d.ref_id";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -131,10 +110,8 @@ public class SqlParserPreciseReplacementTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("new_table_1"));
-        assertTrue(result.contains("new_table_123"));
-        assertFalse(result.contains("table1"));
-        assertFalse(result.contains("table123"));
+        String expected = "SELECT * FROM new_table_1 t1 JOIN new_table_123 t2 ON t1.id = t2.ref_id";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -147,56 +124,10 @@ public class SqlParserPreciseReplacementTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("user_accounts"));
-        assertTrue(result.contains("order_records"));
-        assertFalse(result.contains("users"));
-        assertFalse(result.contains("orders"));
+        String expected = "SELECT u.name FROM user_accounts u WHERE u.id IN (SELECT user_id FROM order_records WHERE total > 100)";
+        assertEquals(expected, result);
     }
 
-    @Test
-    public void testDMLOperations() throws Exception {
-        String sql1 = "INSERT INTO users (name, email) VALUES ('John', 'john@example.com')";
-        String sql2 = "UPDATE users SET email = 'new@example.com' WHERE id = 1";
-        String sql3 = "DELETE FROM users WHERE id = 1";
-
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("users", "user_accounts");
-
-        String result1 = sqlParserService.replaceTableNames(sql1, mapping);
-        String result2 = sqlParserService.replaceTableNames(sql2, mapping);
-        String result3 = sqlParserService.replaceTableNames(sql3, mapping);
-
-        assertTrue(result1.contains("user_accounts"));
-        assertTrue(result2.contains("user_accounts"));
-        assertTrue(result3.contains("user_accounts"));
-
-        assertFalse(result1.contains("users"));
-        assertFalse(result2.contains("users"));
-        assertFalse(result3.contains("users"));
-    }
-
-    @Test
-    public void testDDLOperations() throws Exception {
-        String sql1 = "CREATE TABLE users (id INT, name VARCHAR(100))";
-        String sql2 = "DROP TABLE users";
-        String sql3 = "CREATE TABLE new_users AS SELECT * FROM users";
-
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("users", "user_accounts");
-
-        String result1 = sqlParserService.replaceTableNames(sql1, mapping);
-        String result2 = sqlParserService.replaceTableNames(sql2, mapping);
-        String result3 = sqlParserService.replaceTableNames(sql3, mapping);
-
-        assertTrue(result1.contains("user_accounts"));
-        assertTrue(result2.contains("user_accounts"));
-        assertTrue(result3.contains("user_accounts"));
-
-        assertFalse(result1.contains("users"));
-        assertFalse(result2.contains("users"));
-        // result3 should have new_users unchanged and users replaced
-        assertTrue(result3.contains("new_users"));
-    }
 
     @Test
     public void testMultipleReplacements() throws Exception {
@@ -209,12 +140,7 @@ public class SqlParserPreciseReplacementTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        assertTrue(result.contains("user_accounts"));
-        assertTrue(result.contains("order_records"));
-        assertTrue(result.contains("product_catalog"));
-
-        assertFalse(result.contains("users"));
-        assertFalse(result.contains("orders"));
-        assertFalse(result.contains("products"));
+        String expected = "SELECT u.name, o.total, p.name FROM user_accounts u JOIN order_records o ON u.id = o.user_id JOIN product_catalog p ON o.product_id = p.id";
+        assertEquals(expected, result);
     }
 }

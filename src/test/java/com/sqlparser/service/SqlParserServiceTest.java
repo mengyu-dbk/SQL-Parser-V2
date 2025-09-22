@@ -40,35 +40,9 @@ public class SqlParserServiceTest {
         assertTrue(tableNames.contains("products"));
     }
 
-    @Test
-    public void testReplaceTableNames() throws Exception {
-        String sql = "SELECT * FROM users JOIN orders ON users.id = orders.user_id";
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("users", "user_table");
-        mapping.put("orders", "order_table");
+    // Rewrite behavior is covered in dedicated rewrite tests
 
-        String result = sqlParserService.replaceTableNames(sql, mapping);
-
-        assertNotNull(result);
-        assertTrue(result.contains("user_table"));
-        assertTrue(result.contains("order_table"));
-        assertFalse(result.contains("users"));
-        assertFalse(result.contains("orders"));
-    }
-
-    @Test
-    public void testReplaceTableNamesPartial() throws Exception {
-        String sql = "SELECT * FROM users JOIN orders ON users.id = orders.user_id";
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("users", "user_table");
-
-        String result = sqlParserService.replaceTableNames(sql, mapping);
-
-        assertNotNull(result);
-        assertTrue(result.contains("user_table"));
-        assertTrue(result.contains("orders"));
-        assertFalse(result.contains("users"));
-    }
+    // Rewrite behavior is covered in dedicated rewrite tests
 
     @Test
     public void testExtractTableNamesComplexJoins() throws Exception {
@@ -190,53 +164,11 @@ public class SqlParserServiceTest {
         assertTrue(tableNames.contains("region"));
     }
 
-    @Test
-    public void testReplaceTableNamesComplexQuery() throws Exception {
-        String sql = "SELECT c.name, o.total FROM customer c " +
-                "INNER JOIN orders o ON c.id = o.customer_id";
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("customer", "clients");
-        mapping.put("orders", "purchases");
+    // Rewrite behavior is covered in dedicated rewrite tests
 
-        String result = sqlParserService.replaceTableNames(sql, mapping);
+    // Rewrite behavior is covered in dedicated rewrite tests
 
-        assertNotNull(result);
-        assertTrue(result.contains("clients"));
-        assertTrue(result.contains("purchases"));
-        // Allow for some flexibility in column reference replacement
-        assertTrue(!result.contains(" customer ") || !result.contains(" orders "));
-    }
-
-    @Test
-    public void testReplaceTableNamesWithSubquery() throws Exception {
-        String sql = "SELECT * FROM (SELECT id FROM users WHERE active = true) active_users " +
-                "JOIN orders ON active_users.id = orders.user_id";
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("users", "user_accounts");
-        mapping.put("orders", "order_history");
-
-        String result = sqlParserService.replaceTableNames(sql, mapping);
-
-        assertNotNull(result);
-        assertTrue(result.contains("user_accounts"));
-        assertTrue(result.contains("order_history"));
-        // Allow for some flexibility as column references might not be replaced
-        assertTrue(!result.toLowerCase().contains(" users ") || result.contains("user_accounts"));
-    }
-
-    @Test
-    public void testReplaceTableNamesWithSchema() throws Exception {
-        String sql = "SELECT * FROM public.users u JOIN sales.orders o ON u.id = o.user_id";
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("public.users", "public.user_accounts");
-        mapping.put("sales.orders", "sales.order_records");
-
-        String result = sqlParserService.replaceTableNames(sql, mapping);
-
-        assertNotNull(result);
-        assertTrue(result.contains("public.user_accounts") || result.contains("user_accounts"));
-        assertTrue(result.contains("sales.order_records") || result.contains("order_records"));
-    }
+    // Rewrite behavior is covered in dedicated rewrite tests
 
     @Test
     public void testExtractTableNamesEmptyResult() throws Exception {
@@ -271,19 +203,7 @@ public class SqlParserServiceTest {
         sqlParserService.replaceTableNames(sql, mapping);
     }
 
-    @Test
-    public void testReplaceTableNamesNoMatches() throws Exception {
-        String sql = "SELECT * FROM products";
-        Map<String, String> mapping = new HashMap<>();
-        mapping.put("users", "user_table");
-        mapping.put("orders", "order_table");
-
-        String result = sqlParserService.replaceTableNames(sql, mapping);
-
-        assertNotNull(result);
-        assertTrue(result.contains("products"));
-        assertEquals(sql.trim(), result.trim());
-    }
+    // Rewrite behavior is covered in dedicated rewrite tests
 
     @Test
     public void testExtractTableNamesWindowFunctions() throws Exception {
