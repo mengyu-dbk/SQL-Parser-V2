@@ -1,7 +1,8 @@
 package com.sqlparser.service;
 
+import com.sqlparser.model.RewriteInfo;
+import com.sqlparser.visitor.PositionBasedTableRewriter;
 import com.sqlparser.visitor.TableNameExtractor;
-import com.sqlparser.visitor.TableNameReplacer;
 import io.trino.sql.parser.SqlParser;
 import io.trino.sql.tree.Statement;
 import org.springframework.stereotype.Service;
@@ -13,9 +14,11 @@ import java.util.Set;
 public class SqlParserService {
 
     private final SqlParser sqlParser;
+    private final PositionBasedTableRewriter positionRewriter;
 
     public SqlParserService() {
         this.sqlParser = new SqlParser();
+        this.positionRewriter = new PositionBasedTableRewriter();
     }
 
     public Set<String> extractTableNames(String sql) throws Exception {
@@ -27,17 +30,30 @@ public class SqlParserService {
         return extractor.getTableNames();
     }
 
+    /**
+     * Rewrites table names using a single, canonical implementation:
+     * AST parsing + precise position-based replacement.
+     */
     public String replaceTableNames(String sql, Map<String, String> tableMapping) throws Exception {
-        // First validate input SQL and get the AST
-        Statement statement = sqlParser.createStatement(sql);
+        return positionRewriter.rewriteTableNames(sql, tableMapping);
+    }
 
-        // Use improved context-aware replacement
-        TableNameReplacer replacer = new TableNameReplacer(tableMapping);
-        String result = replacer.replaceTableNames(sql, statement);
+    /**
+     * Analyze which tables would be affected by a rewrite without modifying SQL.
+     */
+    public RewriteInfo analyzeTableRewrite(String sql, Map<String, String> tableMapping) {
+        return positionRewriter.analyzeRewrite(sql, tableMapping);
+    }
 
-        // Validate the result by parsing it
-        sqlParser.createStatement(result);
-
-        return result;
+    /**
+     * Validates that the given SQL is syntactically correct and parseable.
+     */
+    public boolean validateSql(String sql) {
+        try {
+            sqlParser.createStatement(sql);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
