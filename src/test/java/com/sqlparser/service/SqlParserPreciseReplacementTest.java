@@ -82,8 +82,9 @@ public class SqlParserPreciseReplacementTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // Quoted identifiers should be preserved and not replaced
-        assertEquals(sql, result);
+        // Quoted identifiers should now be replaced if they're in the mapping
+        String expected = "SELECT * FROM order_records o JOIN product_catalog p ON o.product_id = p.id";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -96,7 +97,8 @@ public class SqlParserPreciseReplacementTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        String expected = "SELECT * FROM new_table_with_underscores t JOIN \"table-with-dashes\" d ON t.id = d.ref_id";
+        // Both unquoted and quoted identifiers should be replaced
+        String expected = "SELECT * FROM new_table_with_underscores t JOIN new-table-with-dashes d ON t.id = d.ref_id";
         assertEquals(expected, result);
     }
 

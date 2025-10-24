@@ -1,6 +1,8 @@
 package com.sqlparser.visitor;
 
 import io.trino.sql.tree.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -13,6 +15,8 @@ import java.util.Set;
  * (so we can later do string replacements without a separate rewriter class).
  */
 public class TableNameExtractor extends DefaultTraversalVisitor<Void> {
+
+    private static final Logger logger = LoggerFactory.getLogger(TableNameExtractor.class);
 
     // One occurrence of a table token or an unaliased qualifier base in the SQL text
     public static final class TableToken {
@@ -42,6 +46,8 @@ public class TableNameExtractor extends DefaultTraversalVisitor<Void> {
 
     // Precomputed line start offsets for fast NodeLocation -> char offset conversion
     private int[] lineStartOffsets = new int[0];
+    // Original SQL for detecting quoted identifiers
+    private String originalSql = "";
 
     // === Public API ===
 
@@ -50,11 +56,13 @@ public class TableNameExtractor extends DefaultTraversalVisitor<Void> {
         tokens.clear();
         aliases.clear();
         lineStartOffsets = new int[0];
+        originalSql = "";
     }
 
     // Entry point that also provides the original SQL for computing character offsets
     public void collect(Statement stmt, String originalSql) {
         reset();
+        this.originalSql = originalSql;
         buildLineStartOffsets(originalSql);
         process(stmt, null);
     }
@@ -77,7 +85,46 @@ public class TableNameExtractor extends DefaultTraversalVisitor<Void> {
         if (location == null) return;
         int start = toCharOffset(location.getLineNumber(), location.getColumnNumber());
         int end = start + (text != null ? text.length() : 0);
+
+        // Check if this is a quoted identifier in the original SQL
+        // Quoted identifiers start with " and the AST text doesn't include quotes
+        if (start < originalSql.length() && originalSql.charAt(start) == '"') {
+            // This is a quoted identifier - need to include the quotes in the range
+            // The end position should be: start + 1 (opening quote) + text.length() + 1 (closing quote)
+            end = start + text.length() + 2;
+        }
+
         tokens.add(new TableToken(text, start, end));
+    }
+
+    /**
+     * Add a token for a qualified name where we have the full name but the location
+     * points to the last identifier only.
+     *
+     * @param fullName The full qualified name (e.g., "schema.orders")
+     * @param lastIdentifier The last identifier in the name (e.g., "orders")
+     */
+    private void addQualifiedToken(String fullName, Identifier lastIdentifier) {
+        if (lastIdentifier.getLocation().isEmpty()) return;
+        NodeLocation location = lastIdentifier.getLocation().get();
+        int lastPartStart = toCharOffset(location.getLineNumber(), location.getColumnNumber());
+        int lastPartLength = lastIdentifier.getValue().length();
+
+        // Calculate the start of the full qualified name by going backward from the last part
+        // fullName.length() includes all parts and dots (e.g., "catalog.schema.table" = 21 chars)
+        // lastIdentifier is just the last part (e.g., "table" = 5 chars)
+        // So we need to go back: fullName.length() - lastIdentifier.length() characters
+        int fullNameLength = fullName.length();
+        int fullNameStart = lastPartStart - (fullNameLength - lastPartLength);
+        int fullNameEnd = fullNameStart + fullNameLength;
+
+        // Check if this is a quoted identifier in the original SQL
+        if (fullNameStart < originalSql.length() && originalSql.charAt(fullNameStart) == '"') {
+            // This is a quoted identifier - need to include the quotes in the range
+            fullNameEnd = fullNameStart + fullNameLength + 2;
+        }
+
+        tokens.add(new TableToken(fullName, fullNameStart, fullNameEnd));
     }
 
     private int toCharOffset(int lineNumber1Based, int columnNumber1Based) {
@@ -107,8 +154,13 @@ public class TableNameExtractor extends DefaultTraversalVisitor<Void> {
     protected Void visitTable(Table table, Void context) {
         QualifiedName name = table.getName();
         String tokenText = name.toString(); // include qualifiers/quotes if present
+        logger.info("visitTable: table name='{}', location={}", tokenText, table.getLocation());
         tableNames.add(tokenText);
-        table.getLocation().ifPresent(loc -> addToken(tokenText, loc));
+        table.getLocation().ifPresent(loc -> {
+            logger.info("  Adding token for table '{}' at location: line={}, col={}",
+                tokenText, loc.getLineNumber(), loc.getColumnNumber());
+            addToken(tokenText, loc);
+        });
         return null;
     }
 
@@ -160,20 +212,74 @@ public class TableNameExtractor extends DefaultTraversalVisitor<Void> {
     @Override
     protected Void visitDelete(Delete node, Void context) {
         // DELETE FROM <table>
-        process(node.getTable(), null);
+        logger.info("visitDelete: Processing DELETE statement");
+        Table table = node.getTable();
+        QualifiedName tableName = table.getName();
+        logger.info("  Table node: {}", table);
+        logger.info("  Table name: {}", tableName);
+        logger.info("  Table location (incorrect for DELETE): {}", table.getLocation());
+
+        // Add table name to set
+        tableNames.add(tableName.toString());
+
+        // Extract correct position from QualifiedName parts instead of using table.getLocation()
+        // which incorrectly points to the DELETE keyword
+        // Use full qualified name as token text for mapping lookup
+        List<Identifier> parts = tableName.getOriginalParts();
+        if (!parts.isEmpty()) {
+            Identifier last = parts.get(parts.size() - 1);
+            logger.info("  Correct table position from identifier: line={}, col={}",
+                last.getLocation().map(l -> l.getLineNumber()).orElse(-1),
+                last.getLocation().map(l -> l.getColumnNumber()).orElse(-1));
+            // Use qualified token helper to handle position correctly
+            addQualifiedToken(tableName.toString(), last);
+        }
+
         // WHERE may contain subqueries
-        node.getWhere().ifPresent(expr -> process(expr, null));
+        node.getWhere().ifPresent(expr -> {
+            logger.info("  Processing WHERE clause: {}", expr);
+            process(expr, null);
+        });
         return null;
     }
 
     @Override
     protected Void visitUpdate(Update node, Void context) {
         // UPDATE <table>
-        process(node.getTable(), null);
+        logger.info("visitUpdate: Processing UPDATE statement");
+        Table table = node.getTable();
+        QualifiedName tableName = table.getName();
+        logger.info("  Table node: {}", table);
+        logger.info("  Table name: {}", tableName);
+        logger.info("  Table location (incorrect for UPDATE): {}", table.getLocation());
+
+        // Add table name to set
+        tableNames.add(tableName.toString());
+
+        // Extract correct position from QualifiedName parts instead of using table.getLocation()
+        // which incorrectly points to the UPDATE keyword
+        // Use full qualified name as token text for mapping lookup
+        List<Identifier> parts = tableName.getOriginalParts();
+        if (!parts.isEmpty()) {
+            Identifier last = parts.get(parts.size() - 1);
+            logger.info("  Correct table position from identifier: line={}, col={}",
+                last.getLocation().map(l -> l.getLineNumber()).orElse(-1),
+                last.getLocation().map(l -> l.getColumnNumber()).orElse(-1));
+            // Use qualified token helper to handle position correctly
+            addQualifiedToken(tableName.toString(), last);
+        }
+
         // Assignments may contain subqueries
-        node.getAssignments().forEach(a -> process(a.getValue(), null));
+        node.getAssignments().forEach(a -> {
+            logger.info("  Processing assignment: {}", a);
+            process(a.getValue(), null);
+        });
+
         // WHERE may contain subqueries
-        node.getWhere().ifPresent(expr -> process(expr, null));
+        node.getWhere().ifPresent(expr -> {
+            logger.info("  Processing WHERE clause: {}", expr);
+            process(expr, null);
+        });
         return null;
     }
 
@@ -269,14 +375,65 @@ public class TableNameExtractor extends DefaultTraversalVisitor<Void> {
     // MERGE
     @Override
     protected Void visitMerge(Merge node, Void context) {
-        // Target and source relations may be tables or subqueries
-        process(node.getTarget(), null);
+        logger.info("visitMerge: Processing MERGE statement");
+
+        // Handle target table - similar to UPDATE/DELETE, the table location may be incorrect
+        Relation target = node.getTarget();
+        if (target instanceof Table) {
+            Table targetTable = (Table) target;
+            QualifiedName tableName = targetTable.getName();
+            logger.info("  Target table name: {}", tableName);
+            logger.info("  Target table location (may be incorrect for MERGE): {}", targetTable.getLocation());
+
+            // Add table name to set
+            tableNames.add(tableName.toString());
+
+            // Extract correct position from QualifiedName parts instead of using table.getLocation()
+            // Use full qualified name as token text for mapping lookup
+            List<Identifier> parts = tableName.getOriginalParts();
+            if (!parts.isEmpty()) {
+                Identifier last = parts.get(parts.size() - 1);
+                logger.info("  Correct target position from identifier: line={}, col={}",
+                    last.getLocation().map(l -> l.getLineNumber()).orElse(-1),
+                    last.getLocation().map(l -> l.getColumnNumber()).orElse(-1));
+                // Use qualified token helper to handle position correctly
+                addQualifiedToken(tableName.toString(), last);
+            }
+        } else if (target instanceof AliasedRelation) {
+            // If target is aliased, extract the underlying table
+            AliasedRelation aliased = (AliasedRelation) target;
+            if (aliased.getRelation() instanceof Table) {
+                Table targetTable = (Table) aliased.getRelation();
+                QualifiedName tableName = targetTable.getName();
+                logger.info("  Aliased target table name: {}", tableName);
+
+                tableNames.add(tableName.toString());
+
+                // Use full qualified name as token text for mapping lookup
+                List<Identifier> parts = tableName.getOriginalParts();
+                if (!parts.isEmpty()) {
+                    Identifier last = parts.get(parts.size() - 1);
+                    logger.info("  Correct aliased target position from identifier: line={}, col={}",
+                        last.getLocation().map(l -> l.getLineNumber()).orElse(-1),
+                        last.getLocation().map(l -> l.getColumnNumber()).orElse(-1));
+                    // Use qualified token helper to handle position correctly
+                    addQualifiedToken(tableName.toString(), last);
+                }
+            }
+            // Track the alias
+            Identifier alias = aliased.getAlias();
+            if (alias != null) {
+                aliases.add(alias.getValue());
+            }
+        }
+
+        // Source relation may be a table or subquery - let normal traversal handle it
         process(node.getSource(), null);
+
+        // Process predicate and merge cases
         process(node.getPredicate(), null);
-        // Traverse cases (conditions and expressions)
         for (MergeCase c : node.getMergeCases()) {
             c.getExpression().ifPresent(expr -> process(expr, null));
-            // Set expressions may contain subqueries
             c.getSetExpressions().forEach(expr -> process(expr, null));
         }
         return null;
@@ -298,7 +455,28 @@ public class TableNameExtractor extends DefaultTraversalVisitor<Void> {
     // TABLE EXECUTE
     @Override
     protected Void visitTableExecute(TableExecute node, Void context) {
-        process(node.getTable(), null);
+        logger.info("visitTableExecute: Processing TABLE EXECUTE statement");
+        Table table = node.getTable();
+        QualifiedName tableName = table.getName();
+        logger.info("  Table name: {}", tableName);
+        logger.info("  Table location (may be incorrect for TABLE EXECUTE): {}", table.getLocation());
+
+        // Add table name to set
+        tableNames.add(tableName.toString());
+
+        // Extract correct position from QualifiedName parts instead of using table.getLocation()
+        // Use full qualified name as token text for mapping lookup
+        List<Identifier> parts = tableName.getOriginalParts();
+        if (!parts.isEmpty()) {
+            Identifier last = parts.get(parts.size() - 1);
+            logger.info("  Correct table position from identifier: line={}, col={}",
+                last.getLocation().map(l -> l.getLineNumber()).orElse(-1),
+                last.getLocation().map(l -> l.getColumnNumber()).orElse(-1));
+            // Use qualified token helper to handle position correctly
+            addQualifiedToken(tableName.toString(), last);
+        }
+
+        // Process WHERE clause and arguments which may contain subqueries
         node.getWhere().ifPresent(expr -> process(expr, null));
         node.getArguments().forEach(arg -> process(arg.getValue(), null));
         return null;
@@ -424,14 +602,62 @@ public class TableNameExtractor extends DefaultTraversalVisitor<Void> {
     @Override
     protected Void visitDereferenceExpression(DereferenceExpression node, Void context) {
         // Capture positions for unaliased qualifiers like orders.user_id
+        // or multi-part qualifiers like catalog.schema.table.column
+        //
+        // For "cat1.sch1.tab1.id", the AST structure is:
+        // DereferenceExpression(base=DereferenceExpression(base=DereferenceExpression(base=Identifier(cat1), field=sch1), field=tab1), field=id)
+        //
+        // We want to extract "cat1.sch1.tab1" (excluding the final column "id")
+
+        // Extract the table qualifier from the base (everything except the final field)
         Expression base = node.getBase();
+
+        // Use Trino's built-in method to extract qualified name from base
+        QualifiedName baseQualifiedName = null;
+        NodeLocation baseLocation = null;
+
         if (base instanceof Identifier) {
-            Identifier id = (Identifier) base;
-            String name = id.getValue();
-            if (!aliases.contains(name) && id.getLocation().isPresent()) {
-                addToken(name, id.getLocation().get());
+            // Simple case: table.column
+            Identifier identifier = (Identifier) base;
+            baseQualifiedName = QualifiedName.of(identifier.getValue());
+            // For simple identifiers, we need to use the DereferenceExpression's location
+            // since the Identifier itself may not have location info
+            if (node.getLocation().isPresent()) {
+                baseLocation = node.getLocation().get();
+            }
+        } else if (base instanceof DereferenceExpression) {
+            // Complex case: catalog.schema.table.column
+            DereferenceExpression dereferenceBase = (DereferenceExpression) base;
+            baseQualifiedName = DereferenceExpression.getQualifiedName(dereferenceBase);
+            // For multi-part qualified names, use the base's location
+            if (dereferenceBase.getLocation().isPresent()) {
+                baseLocation = dereferenceBase.getLocation().get();
             }
         }
+
+        if (baseQualifiedName != null && baseLocation != null) {
+            List<Identifier> parts = baseQualifiedName.getOriginalParts();
+            if (!parts.isEmpty()) {
+                String qualifiedName = baseQualifiedName.toString();
+                Identifier firstPart = parts.get(0);
+
+                // Check if the first part is an alias
+                if (!aliases.contains(firstPart.getValue())) {
+                    // For simple identifiers (single part), add a token directly using the location
+                    // For multi-part qualifiers, we need to check if it's a known table
+                    if (parts.size() == 1) {
+                        // Simple case: users.id where users is not an alias
+                        addToken(qualifiedName, baseLocation);
+                    } else if (tableNames.contains(qualifiedName)) {
+                        // Multi-part qualified name that matches a known table
+                        // For multi-part, we need to use the last identifier's location
+                        Identifier lastPart = parts.get(parts.size() - 1);
+                        addQualifiedToken(qualifiedName, lastPart);
+                    }
+                }
+            }
+        }
+
         return super.visitDereferenceExpression(node, context);
     }
 }

@@ -4,19 +4,50 @@ A lightweight Java SQL Parser Server built with Trino's Parser for SQL parsing a
 
 ## Features
 
-1. **Extract Table Names**: Extract all table names from SQL queries
-2. **Replace Table Names**: Replace table names in SQL queries based on a mapping
+1. **Extract Table Names**: Extract all table names from SQL queries (including quoted identifiers)
+2. **Replace Table Names**: Replace table names in SQL queries based on a mapping (supports quoted identifiers)
+3. **API Symmetry**: Table names extracted by `extract-tables` can be directly used in `replace-tables` mapping
 
 ## 行为说明（表名替换语义）
 
-基于 Trino AST 的“精确位置替换”，仅替换真正的表标识符 token，保留原 SQL 的注释与格式。
+基于 Trino AST 的"精确位置替换"，仅替换真正的表标识符 token，保留原 SQL 的注释与格式。
 
-- 引号标识符不替换；别名引用不替换；未加别名的列限定符会随表替换而更新
+### 核心规则
+
+- **引号标识符支持替换**：带引号的标识符（如 `"chaintable.token.eth"`）现在会被替换
+- **别名引用不替换**：别名引用不会被替换
+- **列限定符自动更新**：未加别名的列限定符会随表替换而更新
   - 输入：`SELECT users.id, users.name FROM users WHERE users.status = 'active'`
   - 映射：`{"users": "user_accounts"}`
   - 输出：`SELECT user_accounts.id, user_accounts.name FROM user_accounts WHERE user_accounts.status = 'active'`
-  - 引号示例：`SELECT * FROM "users" u` 中的 `"users"` 不会被替换
   - 别名示例：`JOIN orders users ON users.customer_id = ...` 中 `users.customer_id` 不会被替换（users 是别名）
+
+### 引号标识符处理
+
+- **提取行为**：`extract-tables` 总是返回**不带引号**的表名
+  - `SELECT * FROM "users"` → 提取结果：`["users"]`
+  - `DELETE FROM "chaintable.token.eth"` → 提取结果：`["chaintable.token.eth"]`
+
+- **替换行为**：`replace-tables` 接受不带引号的 mapping key，自动匹配带引号或不带引号的表名
+  - 输入SQL：`DELETE FROM "chaintable.token.eth" WHERE id = ?`
+  - 映射：`{"chaintable.token.eth": "new_table"}`（key 不带引号）
+  - 输出：`DELETE FROM new_table WHERE id = ?`
+
+- **接口对称性**：可以直接将 `extract-tables` 的输出用作 `replace-tables` 的 mapping key
+  ```bash
+  # 步骤1：提取表名
+  curl -X POST "http://localhost:8080/api/sql/extract-tables" -d '{
+    "sql": "SELECT * FROM \"chaintable.token.eth\" WHERE id = 1"
+  }'
+  # 响应：{"tableNames": ["chaintable.token.eth"], ...}
+
+  # 步骤2：直接使用提取的表名
+  curl -X POST "http://localhost:8080/api/sql/replace-tables" -d '{
+    "sql": "SELECT * FROM \"chaintable.token.eth\" WHERE id = 1",
+    "tableMapping": {"chaintable.token.eth": "new_table"}
+  }'
+  # 响应：{"sql": "SELECT * FROM new_table WHERE id = 1", ...}
+  ```
 
 - CTAS 仅替换源 SELECT；INSERT 目标不替换；DDL 的 CREATE TABLE、ALTER TABLE 目标会被替换
   - CTAS：
@@ -62,6 +93,9 @@ curl "http://localhost:8080/api/sql/health"
 ```
 
 #### 2. Extract Table Names
+
+Extract table names from SQL (returns unquoted names):
+
 ```bash
 curl -X POST "http://localhost:8080/api/sql/extract-tables" \
   -H "Content-Type: application/json" \
@@ -79,7 +113,28 @@ Response:
 }
 ```
 
+Example with quoted identifiers:
+```bash
+curl -X POST "http://localhost:8080/api/sql/extract-tables" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sql": "DELETE FROM \"chaintable.token.eth\" WHERE id = ?"
+  }'
+```
+
+Response (note: returns unquoted names):
+```json
+{
+  "tableNames": ["chaintable.token.eth"],
+  "success": true,
+  "message": "Success"
+}
+```
+
 #### 3. Replace Table Names
+
+Replace table names using a mapping (mapping keys should be unquoted):
+
 ```bash
 curl -X POST "http://localhost:8080/api/sql/replace-tables" \
   -H "Content-Type: application/json" \
@@ -99,6 +154,54 @@ Response:
   "success": true,
   "message": "Success"
 }
+```
+
+Example with quoted identifiers:
+```bash
+curl -X POST "http://localhost:8080/api/sql/replace-tables" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sql": "DELETE FROM \"chaintable.token.eth\" WHERE id = ?",
+    "tableMapping": {
+      "chaintable.token.eth": "token_table"
+    }
+  }'
+```
+
+Response:
+```json
+{
+  "sql": "DELETE FROM token_table WHERE id = ?",
+  "success": true,
+  "message": "Success"
+}
+```
+
+#### 4. End-to-End Workflow (Extract → Replace)
+
+You can use the output from `extract-tables` directly in `replace-tables`:
+
+```bash
+# Step 1: Extract table names
+TABLES=$(curl -s -X POST "http://localhost:8080/api/sql/extract-tables" \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "SELECT * FROM \"db.schema.users\" u JOIN orders o ON u.id = o.user_id"}' \
+  | jq -r '.tableNames[]')
+
+# Output: db.schema.users, orders
+
+# Step 2: Build mapping and replace
+curl -X POST "http://localhost:8080/api/sql/replace-tables" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sql": "SELECT * FROM \"db.schema.users\" u JOIN orders o ON u.id = o.user_id",
+    "tableMapping": {
+      "db.schema.users": "user_accounts",
+      "orders": "order_records"
+    }
+  }'
+
+# Result: SELECT * FROM user_accounts u JOIN order_records o ON u.id = o.user_id
 ```
 
 ## Testing

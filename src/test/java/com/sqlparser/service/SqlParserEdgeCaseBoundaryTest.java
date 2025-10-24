@@ -29,8 +29,9 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // 引用的标识符不应该被替换 -> 结果应与输入完全一致
-        assertEquals(sql, result);
+        // Quoted identifiers should now be replaced if they're in the mapping
+        String expected = "SELECT * FROM order_table o WHERE o.status = 'PENDING'";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -164,8 +165,9 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        // 引用标识符不应该被替换 -> 完整语句不变
-        assertEquals(sql, result);
+        // Quoted identifiers should now be replaced if they're in the mapping
+        String expected = "SELECT * FROM new_user_table ut JOIN new_user_archive ua ON ut.id = ua.user_id";
+        assertEquals(expected, result);
     }
 
     @Test
@@ -177,7 +179,8 @@ public class SqlParserEdgeCaseBoundaryTest {
         String result = sqlParserService.replaceTableNames(sql, mapping);
 
         assertNotNull(result);
-        String expected = "SELECT * FROM user_accounts u JOIN \"users\" qu ON u.id = qu.id";
+        // Both quoted and unquoted identifiers with the same name should be replaced
+        String expected = "SELECT * FROM user_accounts u JOIN user_accounts qu ON u.id = qu.id";
         assertEquals(expected, result);
     }
 
